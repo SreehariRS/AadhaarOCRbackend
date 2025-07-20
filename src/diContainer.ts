@@ -4,13 +4,13 @@ import { OcrService } from './services/ocrService';
 import { IOcrService } from './interfaces/IOcrService';
 import { OcrController } from './controllers/ocrController';
 
-// DI Container to manage dependencies
+
 export class DIContainer {
   private static instance: DIContainer;
   private dependencies: Map<string, any> = new Map();
 
   private constructor() {
-    // Register dependencies
+    
     this.dependencies.set('IOcrRepository', new OcrRepository());
     this.dependencies.set('IOcrService', new OcrService(this.get<IOcrRepository>('IOcrRepository')));
     this.dependencies.set('IOcrController', new OcrController(this.get<IOcrService>('IOcrService')));
@@ -32,5 +32,4 @@ export class DIContainer {
   }
 }
 
-// Export singleton instance
 export const diContainer = DIContainer.getInstance();

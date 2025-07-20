@@ -22,10 +22,9 @@ export class OcrController implements IOcrController {
       const frontImage = files.front[0];
       const backImage = files.back[0];
 
-      // Validate file types
       if (!['image/jpeg', 'image/png'].includes(frontImage.mimetype) || 
           !['image/jpeg', 'image/png'].includes(backImage.mimetype)) {
-        // Clean up uploaded files
+     
         fs.unlink(frontImage.path, () => {});
         fs.unlink(backImage.path, () => {});
         res.status(HttpStatusCode.BAD_REQUEST).json({ error: 'Only JPEG or PNG images are allowed.' });
@@ -35,7 +34,6 @@ export class OcrController implements IOcrController {
       console.log('Processing images with OCR service');
       const result = await this.ocrService.processImages(frontImage, backImage);
 
-      // Clean up uploaded files after processing
       fs.unlink(frontImage.path, () => {});
       fs.unlink(backImage.path, () => {});
 
@@ -44,7 +42,7 @@ export class OcrController implements IOcrController {
     } catch (error: any) {
       console.error('OCR Controller Error:', error);
 
-      // Clean up files in case of error
+
       if (req.files) {
         const files = req.files as { [fieldname: string]: Express.Multer.File[] };
         if (files.front && files.front[0]) {

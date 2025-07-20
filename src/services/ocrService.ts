@@ -8,7 +8,7 @@ export class OcrService implements IOcrService {
 
   async processImages(frontImage: Express.Multer.File, backImage: Express.Multer.File): Promise<IOcrResult> {
     try {
-      // Pass the file paths to the OCR processor
+     
       const result = await processImages(frontImage.path, backImage.path);
 
       const ocrResult: IOcrResult = {

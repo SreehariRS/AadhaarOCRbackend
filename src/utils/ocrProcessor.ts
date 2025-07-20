@@ -10,7 +10,6 @@ export interface OcrResult {
   pincode: string;
 }
 
-// Helper function to clean and normalize text
 const cleanText = (text: string): string => {
   return text
     .replace(/[^\w\s\/:.-]/g, ' ') // Remove special characters except common ones
@@ -30,38 +29,58 @@ const isValidPincode = (pincode: string): boolean => {
   return cleaned.length === 6 && /^\d{6}$/.test(cleaned);
 };
 
+// Helper function to check if the image is an Aadhaar card
+const isValidAadhaarImage = (text: string): boolean => {
+  // Check for Aadhaar-specific keywords
+  const aadhaarKeywords = /(aadhaar|government of india|unique identification)/i;
+  const hasKeywords = aadhaarKeywords.test(text);
+
+  // Check for Aadhaar number pattern
+  const aadhaarPattern = /\d{4}\s*\d{4}\s*\d{4}|\d{12}|\d{4}[-\s]\d{4}[-\s]\d{4}/g;
+  const hasAadhaarNumber = aadhaarPattern.test(text);
+
+  // Image is valid if it contains either Aadhaar keywords or an Aadhaar number
+  return hasKeywords || hasAadhaarNumber;
+};
+
 // Helper function to extract name with better logic
 const extractName = (text: string): string => {
   const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
   
-  // Look for name patterns
+  // Look for name patterns with label context
   const namePatterns = [
-    /(?:Name|नाम)\s*:?\s*([A-Za-z\s]{2,50})/i,
-    /^([A-Z][a-z]+(?:\s+[A-Z][a-z]*){0,3})$/m, // Allow names with initials (e.g., Rajeev M)
-    /\b([A-Z][a-z]+(?:\s+[A-Z]\.?){0,2})\b/m, // Match names like "Rajeev M" or "Rajeev M."
+    /(?:Name|नाम)\s*:?\s*([A-Za-z\s]{2,50})(?!\s*(address|dob|gender|pincode))/i, // Match "Name: Sreehari R S" or "नाम: Sreehari R S" and exclude lines followed by other fields
+    /^([A-Z][a-z]+(?:\s+[A-Z][a-z]*){0,3})$/m, // Allow names with initials (e.g., Sreehari R S)
+    /\b([A-Z][a-z]+(?:\s+[A-Z]\.?){0,2})\b(?!\s*(Male|Female|MALE|FEMALE|पुरुष|महिला|address|dob|gender|pincode))/m, // Match names like "Sreehari R" but exclude gender or other fields
   ];
   
   for (const pattern of namePatterns) {
     const match = text.match(pattern);
     if (match && match[1]) {
       const name = match[1].trim();
-      // Validate name (should be 1-4 words, first letter capitalized, optional initial)
-      if (/^[A-Z][a-z]*(?:\s+[A-Z][a-z]*){0,3}(?:\s+[A-Z]\.?)?$/.test(name) && name.length <= 50) {
+      // Validate name (should be 1-4 words, first letter capitalized, optional initial, and not a field label)
+      if (/^[A-Z][a-z]*(?:\s+[A-Z][a-z]*){0,3}(?:\s+[A-Z]\.?)?$/.test(name) && 
+          name.length <= 50 && 
+          !/(^address$|^dob$|^gender$|^pincode$|^Male$|^Female$|^M$|^F$|^पुरुष$|^महिला$)/i.test(name)) {
         return name;
       }
     }
   }
   
-  // Fallback: Look for the first line that looks like a name, prioritizing early lines
-  for (const line of lines) {
-    const cleaned = cleanText(line);
-    // Skip common header text
-    if (cleaned.match(/government|india|aadhaar|unique|identification/i)) {
+  // Fallback: Look for the first line that looks like a name, prioritizing early lines and excluding other fields
+  for (let i = 0; i < lines.length; i++) {
+    const cleaned = cleanText(lines[i]);
+    // Skip lines with field labels or gender terms
+    if (cleaned.match(/government|india|aadhaar|unique|identification|address|dob|gender|pincode|male|female/i)) {
       continue;
     }
-    // Look for proper name format or name with initial
+    // Look for proper name format or name with initial, ensuring it's not part of an address
     if ((/^[A-Z][a-z]+(?:\s+[A-Z][a-z]*){0,2}(?:\s+[A-Z]\.?)?$/.test(cleaned) && cleaned.length <= 50) ||
-        /^[A-Z][a-z]+\s+[A-Z]\.?$/i.test(cleaned)) { // Specific check for "Rajeev M"
+        /^[A-Z][a-z]+\s+[A-Z]\.?$/i.test(cleaned)) {
+      // Check next line to avoid picking up address parts
+      if (i + 1 < lines.length && lines[i + 1].match(/address|pincode/i)) {
+        continue;
+      }
       return cleaned;
     }
   }
@@ -245,6 +264,11 @@ export const processImages = async (frontImagePath: string, backImagePath: strin
     const frontText = frontResult.data.text;
     const backText = backResult.data.text;
     const combinedText = frontText + '\n' + backText;
+
+    // Validate if images are Aadhaar cards
+    if (!isValidAadhaarImage(frontText) || !isValidAadhaarImage(backText)) {
+      throw new Error('Invalid upload. Please upload valid Aadhaar front and back images.');
+    }
 
     // Extract all fields using improved functions
     const name = extractName(frontText) || extractName(backText);
